@@ -5,39 +5,21 @@
 //  Created by Quentin Zervaas on 24/11/18.
 //
 
-#if canImport(UIKit)
-import UIKit
-#else
-import AppKit
-#endif
+import Foundation
 
 extension OutcastID3.Frame {
     public struct PictureFrame: OutcastID3TagFrame {
         static let frameIdentifier = "APIC"
         
         public struct Picture: Codable {
-            #if canImport(UIKit)
-            public typealias PictureImage = UIImage
-            #else
-            public typealias PictureImage = NSImage
-            #endif
-            
-            public let image: PictureImage
+            public let image: Data
 
-            public init(image: PictureImage) {
+            public init(image: Data) {
                 self.image = image
             }
             
             init?(data: Data) {
-                guard let image = PictureImage(data: data) else {
-                    return nil
-                }
-                
-                self.image = image
-            }
-
-            var toPngData: Data? {
-                return self.image.pngRepresentation
+                self.image = data
             }
         }
         
@@ -150,13 +132,6 @@ extension OutcastID3.Frame.PictureFrame {
             break
         }
         
-        
-
-        // TODO: This should use the correct image type according to the mimetype
-        guard let imageData = self.picture.toPngData else {
-            throw OutcastID3.MP3File.WriteError.encodingError
-        }
-
         let fb = FrameBuilder(frameIdentifier: OutcastID3.Frame.PictureFrame.frameIdentifier)
         fb.addStringEncodingByte(encoding: self.encoding)
         
@@ -175,9 +150,6 @@ extension OutcastID3.Frame.PictureFrame {
             includeEncodingByte: false,
             terminator: version.stringTerminator(encoding: self.encoding)
         )
-
-
-        fb.append(data: imageData)
         
         return try fb.data()
     }
@@ -226,28 +198,11 @@ extension OutcastID3.Frame.PictureFrame.Picture {
         
         let data = try container.decode(Data.self, forKey: CodingKeys.image)
 
-        #if canImport(UIKit)
-        if #available(iOS 11, tvOS 11, macOS 10.15, *) {
-            guard let image = try? NSKeyedUnarchiver.unarchivedObject(ofClass: UIImage.self, from: data) else {
-                throw OutcastID3.Frame.PictureFrame.Error.decodingError
-            }
-
-            self.image = image
-        }
-        else {
-            guard let image = NSKeyedUnarchiver.unarchiveObject(with: data) as? PictureImage else {
-                throw OutcastID3.Frame.PictureFrame.Error.decodingError
-            }
-
-            self.image = image
-        }
-        #else
-        guard let image = NSKeyedUnarchiver.unarchiveObject(with: data) as? PictureImage else {
+        guard let image = NSKeyedUnarchiver.unarchiveObject(with: data) as? Data else {
             throw OutcastID3.Frame.PictureFrame.Error.decodingError
         }
 
         self.image = image
-        #endif
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -263,29 +218,3 @@ extension OutcastID3.Frame.PictureFrame.Picture {
         }
     }
 }
-
-#if canImport(UIKit)
-extension UIImage {
-    var pngRepresentation: Data? {
-        return self.pngData()
-    }
-}
-#else
-extension NSBitmapImageRep {
-    var pngRepresentation: Data? {
-        return representation(using: .png, properties: [:])
-    }
-}
-
-extension Data {
-    var bitmap: NSBitmapImageRep? {
-        return NSBitmapImageRep(data: self)
-    }
-}
-
-extension NSImage {
-    var pngRepresentation: Data? {
-        return self.tiffRepresentation?.bitmap?.pngRepresentation
-    }
-}
-#endif
